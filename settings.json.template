@@ -1,0 +1,6 @@
+{
+    "bot_token":"your_token",
+    "roleId":"role to have for using the app",
+    "add_log_webhook":"webhook link",
+    "ping_log_webhook":"webhook link"
+}

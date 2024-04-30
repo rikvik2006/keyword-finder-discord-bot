@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+
+# virtualenv
+Lib/
+Scripts/
+pyvenv.cfg
+
+# Vscode
+.vscode/
+
+# Auto pinger
+pings.json
+settings.json
