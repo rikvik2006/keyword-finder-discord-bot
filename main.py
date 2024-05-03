@@ -9,7 +9,7 @@ from discord_webhook import DiscordWebhook, DiscordEmbed
 from helpers import add_ping, check_msg_has_keyword, get_pings, save_pings, get_embed
 import traceback
 
-client = commands.Bot(command_prefix="!", intents=Intents(65059))
+client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 with open("settings.json", "r") as file:
     settings = json.load(file)
@@ -50,7 +50,7 @@ async def send_embed_log(webhook: str, log: int, target: int, kws: str, price):
         print(f"Failed to Sent Notification to Discord: {e}")
 
 
-async def send_embed_ping(webhook: str, embed, target: int, kws: str, price):
+async def send_embed_ping(webhook: str, target: int, kws: str, price):
     try:
         webhook = DiscordWebhook(
             url=webhook,
@@ -89,65 +89,63 @@ async def on_ready():
 @client.event
 async def on_message(message: discord.Message):
 
-    if message.author.name != client.user.name:
+    if message.author.id == client.user.id:
+        return
 
-        msg_channel = message.channel.id
-        pings_updated = False
+    msg_channel = message.channel.id
+    pings_updated = False
 
-        mentions = []
+    mentions = []
 
-        for ping in pings:
+    for ping in pings:
 
-            pkws: str = ping["positiveKeywords"]
-            nkws: str = ping["negativeKeywords"]
-            price: int = ping["price"]
-            timestamp: int = ping["pingTimestamp"]
-            target = get(message.guild.members, id=ping["memberId"])
-            channel: int = ping["channelId"]
+        pkws: str = ping["positiveKeywords"]
+        nkws: str = ping["negativeKeywords"]
+        price: int = ping["price"]
+        timestamp: int = ping["pingTimestamp"]
+        target = get(message.guild.members, id=ping["memberId"])
+        channel: int = ping["channelId"]
 
-            if msg_channel == channel:
+        if msg_channel == channel or channel == "server":
 
-                now = int(time.time())
+            now = int(time.time())
 
-                if check_msg_has_keyword(message, pkws, nkws, price):
-                    pings_updated = True
-                    print("ping")
-                    ping["pingTimestamp"] = now
+            if check_msg_has_keyword(message, pkws, nkws, price):
+                pings_updated = True
+                print("ping")
+                ping["pingTimestamp"] = now
 
-                    await DMChannel.send(target, embed=get_embed(message))
-                    await send_embed_ping(
-                        settings["ping_log_webhook"],
-                        get_embed(message),
-                        target,
-                        pkws,
-                        price,
-                    )
-                else:
-                    print("No ping")
+                
+                await DMChannel.send(target, embeds=message.embeds, content=message.content, files=message.attachments)
+                await send_embed_ping(
+                    settings["ping_log_webhook"],
+                    target,
+                    pkws,
+                    price,
+                )
+            else:
+                print("No ping")
 
-        if pings_updated:
-            save_pings(pings)
+    if pings_updated:
+        save_pings(pings)
 
     await client.process_commands(message)
 
 
 @client.tree.command(name="add_kw", description="Aggiungi una nuova kw.")
-@app_commands.checks.has_role(str(settings["roleId"]))
+# @app_commands.checks.has_role(str(settings["roleId"]))
 async def add_new_ping(
     itr: discord.Interaction,
     target_channel: discord.TextChannel,
     positive_keywords: str,
-    price: int,
+    price: int = None,
     negative_keywords: str = None,
 ):
 
     global pings
     if not negative_keywords:
-
         negative_keywords = []
-
     else:
-
         negative_keywords = negative_keywords.split(",")
 
     positive_keywords = positive_keywords.split(",")
@@ -164,6 +162,38 @@ async def add_new_ping(
         "✅ Keyword aggiunta correttamente!", ephemeral=True
     )
 
+@client.tree.command(name="ping", description="pong")  
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("pong")
+
+
+@client.tree.command(name="add_kw_server", description="Aggiungi una nuova kw. Per l'intero server (non solo un canale)")
+# @app_commands.checks.has_role(str(settings["roleId"]))
+async def add_new_ping_server(
+    itr: discord.Interaction,
+    positive_keywords: str,
+    price: int = None,
+    negative_keywords: str = None,
+):
+    global pings
+    if not negative_keywords:
+        negative_keywords = []
+    else:
+        negative_keywords = negative_keywords.split(",")
+
+    positive_keywords = positive_keywords.split(",")
+
+    updated_pings = add_ping(
+        "server", positive_keywords, negative_keywords, price, itr.user.id
+    )
+    await send_embed_log(
+        settings["ping_log_webhook"], 1, itr.user.id, positive_keywords, price
+    )
+    pings = updated_pings
+
+    await itr.response.send_message(
+        "✅ Keyword aggiunta correttamente!", ephemeral=True
+    )
 
 async def delete_ping_autocomplete(itr: discord.Interaction, current: str):
 
@@ -192,7 +222,7 @@ async def delete_ping_autocomplete(itr: discord.Interaction, current: str):
 
 @client.tree.command(name="delete_kw", description="Rimuovi una kw salvata.")
 @app_commands.autocomplete(ping=delete_ping_autocomplete)
-@app_commands.checks.has_role(str(settings["roleId"]))
+# @app_commands.checks.has_role(str(settings["roleId"]))
 async def delete_ping(itr: discord.Interaction, ping: int):
 
     global pings
@@ -216,7 +246,7 @@ async def delete_ping(itr: discord.Interaction, ping: int):
 
 @client.tree.command(name="edit_kw", description="Edita una kw salvata.")
 @app_commands.autocomplete(ping=delete_ping_autocomplete)
-@app_commands.checks.has_role(str(settings["roleId"]))
+# @app_commands.checks.has_role(str(settings["roleId"]))
 async def edit_ping(
     itr: discord.Interaction,
     ping: int,
@@ -284,7 +314,7 @@ async def edit_ping(
 async def on_app_command_error(itr: discord.Interaction, error):
 
     if isinstance(error, app_commands.errors.MissingRole):
-        await itr.response.send_message("Permessi mancanti", ephemeral=True)
+        await itr.response.send_message("Error: Permessi mancanti", ephemeral=True)
 
 
 client.run(settings["bot_token"])
