@@ -2,12 +2,13 @@ import discord
 from discord.ext import commands
 from discord.utils import get
 from discord import app_commands
-from discord import DMChannel, Intents
+from discord import DMChannel, Embed
 import time
 import json
 from discord_webhook import DiscordWebhook, DiscordEmbed
 from helpers import add_ping, check_msg_has_keyword, get_pings, save_pings, get_embed
 import traceback
+from typing import Union
 
 client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
@@ -83,7 +84,8 @@ async def send_embed_ping(webhook: str, target: int, message: discord.Message, k
 @client.event
 async def on_ready():
 
-    await client.tree.sync(guild=client.get_guild(980586843072503808))
+    client.tree.copy_global_to(guild=client.get_guild(980586843072503808))
+    await client.tree.sync()
 
 
 @client.event
@@ -255,16 +257,16 @@ async def delete_ping(itr: discord.Interaction, ping: int):
 # @app_commands.checks.has_role(str(settings["roleId"]))
 async def edit_ping(
     itr: discord.Interaction,
-    ping: int,
-    target_channel: discord.TextChannel = None,
-    positive_keywords: str = None,
-    price: int = None,
-    negative_keywords: str = None,
+    keyword_id: int,
+    new_target_channel: discord.TextChannel = None,
+    new_positive_keywords: str = None,
+    new_price: int = None,
+    new_negative_keywords: str = None,
 ):
 
     global pings
 
-    target_ping = pings[ping]
+    target_ping = pings[keyword_id]
 
     if target_ping["memberId"] and (target_ping["memberId"] != itr.user.id):
 
@@ -315,6 +317,56 @@ async def edit_ping(
             print(e)
             traceback.print_exc()
 
+
+@client.tree.command(name="list_keywords", description="List all saved keywords.")
+async def list_keywords(itr: discord.Interaction):
+
+    pings = get_pings()
+
+    username = itr.user.name
+    embed_description = ""
+    for i, ping in enumerate(pings):
+
+        if ping["memberId"] == itr.user.id:
+            channel: Union[discord.TextChannel, None] = None
+            if  ping["channelId"] == "server":
+                channel = None
+            else:
+                channel = get(itr.guild.channels, id=ping["channelId"])
+            pkws: list[str] = ", ".join(ping["positiveKeywords"])
+            nkws: list[str] = ", ".join(ping["negativeKeywords"])
+            price: int | None = ping["price"]
+
+            if channel:
+                embed_description += f"**Channel:** <#{channel.id}>\n"
+            else:
+                embed_description += f"**Channel:** Server\n"
+
+            embed_description += f"**Positive Keywords:** {pkws}\n"
+            if len(nkws) > 0:
+                embed_description += f"**Negative Keywords:** {nkws}\n"
+            else:
+                embed_description += f"**Negative Keywords:** Not set\n"
+
+            if price: 
+                embed_description += f"**Price:** {price} €\n"
+            else:
+                embed_description += f"**Price:** Not set\n\n"
+    
+    print("🔥", embed_description)
+    if embed_description == "":
+        embed_description = "No keywords found"
+
+    embed = Embed()
+    embed.set_author(name=f"{username}'s Keywords", icon_url=itr.user.avatar_url)
+    embed.description = embed_description
+    embed.color = 0x2D2D2D
+    embed.set_footer(text="Keyword Logger", icon_url=settings["avatar_url"])
+    
+    try:
+        await itr.response.send_message(embed=embed)
+    except Exception as e:
+        print(f"Errore nell'invio del messaggio: {e}")
 
 @client.tree.error
 async def on_app_command_error(itr: discord.Interaction, error):
