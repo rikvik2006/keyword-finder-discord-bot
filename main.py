@@ -98,6 +98,12 @@ async def on_message(message: discord.Message):
     
     if message.author.id == client.user.id:
         return
+    
+    channel_webhooks = await message.channel.webhooks()
+    for webhook in channel_webhooks:
+        print("🔗", webhook.url)
+        if webhook.url == settings["add_log_webhook"] or webhook.url == settings["ping_log_webhook"]:
+            return
 
     msg_channel = message.channel.id
     pings_updated = False
@@ -111,15 +117,14 @@ async def on_message(message: discord.Message):
         target = get(message.guild.members, id=ping["memberId"])
         channel: int = ping["channelId"]
 
-        print("🎯 Before message channel check")
         print(f"🌸 Keyword: {pkws} On Channel: {channel}, Original message on channel: {msg_channel}")
-        if msg_channel == channel:
+        if msg_channel == channel or channel == "server":
 
             now = int(time.time())
 
             if check_msg_has_keyword(message, pkws, nkws, price):
                 pings_updated = True
-                print("ping")
+                print("🌟 PING!")
                 ping["pingTimestamp"] = now
 
                 await DMChannel.send(target, content="# `🎯 Found a new keyword`")
@@ -132,7 +137,7 @@ async def on_message(message: discord.Message):
                     price,
                 )
             else:
-                print("No ping")
+                print("🧙‍♂️ No ping")
 
     if pings_updated:
         save_pings(pings)
