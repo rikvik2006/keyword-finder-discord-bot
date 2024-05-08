@@ -65,13 +65,12 @@ def check_msg_has_keyword(
     positive_keywords = [k.lower() for k in positive_keywords]
     negative_keywords = [k.lower() for k in negative_keywords]
 
-    print(positive_keywords)
-    print("🚀🚀 Message content:", msg.content)
+    print("🟢 Positive keywords", positive_keywords)
+    print("🔴 Negative  keywords", negative_keywords)
     embedJson = _parse_msg_text(msg)
-    print("Embed json", embedJson)
+
     # Controlla se una qualunque delle positive keyword sono presenti all interno del titolo, any restituisce true se all interno di un iterabile c'è true
     # Inoltre controlla anche se NON sono presenti delle negative keyword e fa un and, in modo tale che siano entrabe vere
-
     if len(negative_keywords) > 0:
         title_check = any(
             k.lower() in embedJson["title"].lower() for k in positive_keywords
@@ -84,18 +83,8 @@ def check_msg_has_keyword(
         ) and any(k.lower() not in embedJson["description"].lower() for k in negative_keywords)
         print("🚀 ~ description_check:", description_check)
 
-
-        # for k in positive_keywords:
-        #     print("🎯", k)
-        #     if k.lower() in embedJson["txt"].lower():
-        #         print("💚 ~ k.lower() in embedJson[txt].lower():", k.lower())
-
-        # print("💚", [k.lower() in embedJson["txt"].lower() for k in positive_keywords])
-
         txt_pos_check = [k.lower() in embedJson["txt"].lower() for k in positive_keywords]
         txt_neg_check = [k.lower() not in embedJson["txt"].lower() for k in negative_keywords]
-        # print("💚+", txt_pos_check)
-        # print("💚-", txt_neg_check)
         txt_check = any(txt_pos_check) and any(txt_neg_check)
         print("🚀 ~ txt_check:", txt_check)
 
@@ -113,11 +102,9 @@ def check_msg_has_keyword(
     if price and "price" in embedJson.keys():
         # price_check = float(embedJson["price"].split()) <= float(price)
         price_check = any(list(map(lambda x: float(x) <= float(price), embedJson["price"].split("|"))))
-        print("🚀 ~ title_check:", title_check)   
+        print("🚀 ~ price_check:", price_check)
         return (title_check or description_check or txt_check or url_check) and price_check
    
-    
-    print("🚀 ~ title_check:", title_check)
     return title_check or description_check or txt_check or url_check
 
 
