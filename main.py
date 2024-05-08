@@ -18,31 +18,36 @@ pings = get_pings()
 
 
 async def send_embed_log(webhook: str, log: int, target: int, kws: str, price):
-    if log == 1:
-        title = "Kw Aggiunta"
-    elif log == 2:
-        title = "Kw Editata"
-    else:
-        title = "Kw Rimossa"
     try:
         webhook = DiscordWebhook(
             url=webhook,
-            username="HUNTERS",
-            avatar_url="https://imgur.com/eI3OKkX",
+            username="[LOG] Keyword Logger",
+            avatar_url=settings["avatar_url"],
         )
-        embed = DiscordEmbed(title=title, color=16777215)
+
+        embed = DiscordEmbed()
+
+        if log == 1:
+            embed.title = "Keyword Aggiunta"
+            embed.color = 5763719
+        elif log == 2:
+            embed.title = "Keyword Editata"
+            embed.color = 16776960
+        else:
+            embed.title = "Keyword Rimossa"
+            embed.color = 15548997
+    
         embed.set_footer(
-            url="https://imgur.com/eI3OKkX",
-            icon_url="https://imgur.com/eI3OKkX",
-            text="HUNTERS",
+            icon_url=settings["avatar_url"],
+            text="[LOG] Keyword Logger",
         )
         embed.set_timestamp()
         embed.set_author(
-            name="Logger",
-            icon_url="https://imgur.com/eI3OKkX",
+            name="[LOG] Keyword Logger",
         )
-        embed.add_embed_field(name="MemberId", value=str(target), inline=False)
-        embed.add_embed_field(name="Kw", value=str(kws), inline=True)
+        embed.set_thumbnail(url=settings["avatar_url"])
+        embed.add_embed_field(name="Member Id", value=str(target), inline=False)
+        embed.add_embed_field(name="Kewords", value=str(kws), inline=True)
         embed.add_embed_field(name="Price", value=str(price), inline=True)
         webhook.add_embed(embed)
         webhook.execute()
@@ -54,20 +59,19 @@ async def send_embed_ping(webhook: str, target: int, kws: str, price):
     try:
         webhook = DiscordWebhook(
             url=webhook,
-            username="HUNTERS",
-            avatar_url="https://imgur.com/eI3OKkX",
+            username="[PING] Keyword Logger",
+            avatar_url=settings["avatar_url"],
         )
-        embed = DiscordEmbed(title="Kw Ping", color=16777215)
+        embed = DiscordEmbed(title="Keyword PING", color=5793266)
         embed.set_footer(
-            url="https://imgur.com/eI3OKkX",
-            icon_url="https://imgur.com/eI3OKkX",
+            icon_url=settings["avatar_url"],
             text="HUNTERS",
         )
         embed.set_timestamp()
         embed.set_author(
-            name="Logger",
-            icon_url="https://imgur.com/eI3OKkX",
+            name="[PING] Keyword Logger"
         )
+        embed.set_thumbnail(url=settings["avatar_url"])
         embed.add_embed_field(name="MemberId", value=str(target), inline=False)
         embed.add_embed_field(
             name="Product", value=f"{str(embed.title)}\n {embed.url}", inline=False
@@ -83,19 +87,20 @@ async def send_embed_ping(webhook: str, target: int, kws: str, price):
 @client.event
 async def on_ready():
 
-    await client.tree.sync()
+    await client.tree.sync(guild=client.get_guild(980586843072503808))
 
 
 @client.event
 async def on_message(message: discord.Message):
-
+    
+    if not message.guild:
+        return
+    
     if message.author.id == client.user.id:
         return
 
     msg_channel = message.channel.id
     pings_updated = False
-
-    mentions = []
 
     for ping in pings:
 
@@ -106,7 +111,9 @@ async def on_message(message: discord.Message):
         target = get(message.guild.members, id=ping["memberId"])
         channel: int = ping["channelId"]
 
-        if msg_channel == channel or channel == "server":
+        print("🎯 Before message channel check")
+        print(f"🌸 Keyword: {pkws} On Channel: {channel}, Original message on channel: {msg_channel}")
+        if msg_channel == channel:
 
             now = int(time.time())
 
@@ -115,8 +122,9 @@ async def on_message(message: discord.Message):
                 print("ping")
                 ping["pingTimestamp"] = now
 
-                
+                await DMChannel.send(target, content="# `🎯 Found a new keyword`")
                 await DMChannel.send(target, embeds=message.embeds, content=message.content, files=message.attachments)
+                await DMChannel.send(target, content=f"Easy actions: [[Jump to message](<{message.jump_url}>)]")
                 await send_embed_ping(
                     settings["ping_log_webhook"],
                     target,
@@ -132,68 +140,65 @@ async def on_message(message: discord.Message):
     await client.process_commands(message)
 
 
-@client.tree.command(name="add_kw", description="Aggiungi una nuova kw.")
+async def add_new_keyword(
+    server_keyword: bool,
+    itr: discord.Interaction, 
+    target_channel: discord.TextChannel,
+    positive_keywords: str,
+    price: int = None,
+    negative_keywords: str = None,
+):
+    global pings
+
+    def remove_space(keyword: str) -> str:
+        return keyword.strip()
+    
+    if not negative_keywords:
+        negative_keywords = []
+    else:
+        negative_keywords = list(map(remove_space, negative_keywords.strip().split(",")))
+
+    positive_keywords = list(map(remove_space, positive_keywords.strip().split(",")))
+
+
+    if server_keyword:
+        target_channel = "server"
+
+    updated_pings = add_ping(
+        target_channel, positive_keywords, negative_keywords, price, itr.user.id
+    )
+
+    # Send a log that say that a new keyword has been added with the keyword info
+    await send_embed_log(
+        settings["add_log_webhook"], 1, itr.user.id, positive_keywords, price
+    )
+    pings = updated_pings
+
+    await itr.response.send_message(
+        "✅ Keyword aggiunta correttamente!", ephemeral=True
+    )
+
+@client.tree.command(name="add_keyword", description="Aggiungi una nuova kw.")
 # @app_commands.checks.has_role(str(settings["roleId"]))
-async def add_new_ping(
+async def add_new_keyword_command(
     itr: discord.Interaction,
     target_channel: discord.TextChannel,
     positive_keywords: str,
     price: int = None,
     negative_keywords: str = None,
 ):
+    await add_new_keyword(False, itr, target_channel, positive_keywords, price, negative_keywords)
+    
 
-    global pings
-    if not negative_keywords:
-        negative_keywords = []
-    else:
-        negative_keywords = negative_keywords.split(",")
-
-    positive_keywords = positive_keywords.split(",")
-
-    updated_pings = add_ping(
-        target_channel, positive_keywords, negative_keywords, price, itr.user.id
-    )
-    await send_embed_log(
-        settings["ping_log_webhook"], 1, itr.user.id, positive_keywords, price
-    )
-    pings = updated_pings
-
-    await itr.response.send_message(
-        "✅ Keyword aggiunta correttamente!", ephemeral=True
-    )
-
-@client.tree.command(name="ping", description="pong")  
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("pong")
-
-
-@client.tree.command(name="add_kw_server", description="Aggiungi una nuova kw. Per l'intero server (non solo un canale)")
+@client.tree.command(name="add_keyword_server", description="Aggiungi una nuova kw. Per l'intero server (non solo un canale)")
 # @app_commands.checks.has_role(str(settings["roleId"]))
-async def add_new_ping_server(
+async def add_new_keyword_server_command(
     itr: discord.Interaction,
     positive_keywords: str,
     price: int = None,
     negative_keywords: str = None,
 ):
-    global pings
-    if not negative_keywords:
-        negative_keywords = []
-    else:
-        negative_keywords = negative_keywords.split(",")
-
-    positive_keywords = positive_keywords.split(",")
-
-    updated_pings = add_ping(
-        "server", positive_keywords, negative_keywords, price, itr.user.id
-    )
-    await send_embed_log(
-        settings["ping_log_webhook"], 1, itr.user.id, positive_keywords, price
-    )
-    pings = updated_pings
-
-    await itr.response.send_message(
-        "✅ Keyword aggiunta correttamente!", ephemeral=True
-    )
+    await add_new_keyword(True, itr, None, positive_keywords, price, negative_keywords)
 
 async def delete_ping_autocomplete(itr: discord.Interaction, current: str):
 
@@ -220,7 +225,7 @@ async def delete_ping_autocomplete(itr: discord.Interaction, current: str):
     return data
 
 
-@client.tree.command(name="delete_kw", description="Rimuovi una kw salvata.")
+@client.tree.command(name="delete_keyword", description="Rimuovi una kw salvata.")
 @app_commands.autocomplete(ping=delete_ping_autocomplete)
 # @app_commands.checks.has_role(str(settings["roleId"]))
 async def delete_ping(itr: discord.Interaction, ping: int):
@@ -244,7 +249,7 @@ async def delete_ping(itr: discord.Interaction, ping: int):
         )
 
 
-@client.tree.command(name="edit_kw", description="Edita una kw salvata.")
+@client.tree.command(name="edit_keyword", description="Edita una kw salvata.")
 @app_commands.autocomplete(ping=delete_ping_autocomplete)
 # @app_commands.checks.has_role(str(settings["roleId"]))
 async def edit_ping(
@@ -298,7 +303,7 @@ async def edit_ping(
                 target_channel, positive_keywords, negative_keywords, price, itr.user.id
             )
             await send_embed_log(
-                settings["ping_log_webhook"], 2, itr.user.id, positive_keywords, price
+                settings["add_log_webhook"], 2, itr.user.id, positive_keywords, price
             )
             pings = updated_pings
 
