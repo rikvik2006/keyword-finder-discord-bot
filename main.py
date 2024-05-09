@@ -86,7 +86,7 @@ async def send_embed_ping(webhook: str, target: int, message: discord.Message, k
 async def on_ready():
 
     client.tree.copy_global_to(guild=client.get_guild(980586843072503808))
-    await client.tree.sync(guild=client.get_guild(980586843072503808))
+    await client.tree.sync()
 
 
 @client.event
@@ -221,7 +221,7 @@ async def delete_keyword_autocomplete(
             if current in "".join(keyword_id.split("-")) or current in keyword_id:
                 data.append(
                     app_commands.Choice(
-                        name=f"Keyword ID: {keyword_id}",
+                        name=keyword_id,
                         value=keyword_id,
                     )
                 )
