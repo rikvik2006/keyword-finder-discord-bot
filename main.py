@@ -6,9 +6,10 @@ from discord import DMChannel, Embed
 import time
 import json
 from discord_webhook import DiscordWebhook, DiscordEmbed
-from helpers import add_ping, check_msg_has_keyword, get_pings, save_pings, get_embed
+from helpers import add_ping, check_msg_has_keyword, get_pings, save_pings, remove_space, format_keywords
 import traceback
-from typing import Union
+from typing import Union, List
+import uuid
 
 client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
@@ -85,7 +86,7 @@ async def send_embed_ping(webhook: str, target: int, message: discord.Message, k
 async def on_ready():
 
     client.tree.copy_global_to(guild=client.get_guild(980586843072503808))
-    await client.tree.sync()
+    await client.tree.sync(guild=client.get_guild(980586843072503808))
 
 
 @client.event
@@ -152,9 +153,6 @@ async def add_new_keyword(
     negative_keywords: str = None,
 ):
     global pings
-
-    def remove_space(keyword: str) -> str:
-        return keyword.strip()
     
     if not negative_keywords:
         negative_keywords = []
@@ -167,8 +165,11 @@ async def add_new_keyword(
     if server_keyword:
         target_channel = "server"
 
+    # Generate a new UUID for the keyword
+    keyword_uuid: str = str(uuid.uuid4())
+
     updated_pings = add_ping(
-        target_channel, positive_keywords, negative_keywords, price, itr.user.id
+        keyword_uuid, target_channel, positive_keywords, negative_keywords, price, itr.user.id
     )
 
     # Send a log that say that a new keyword has been added with the keyword info
@@ -203,25 +204,26 @@ async def add_new_keyword_server_command(
 ):
     await add_new_keyword(True, itr, None, positive_keywords, price, negative_keywords)
 
-async def delete_ping_autocomplete(itr: discord.Interaction, current: str):
-
+# Autocomplete for the delete_keyword an edit_keyword commands (is the data that appear in the selection menu to select the keyword to delete/edit)
+async def delete_keyword_autocomplete(
+    itr: discord.Interaction,
+    current: str,
+) -> List[app_commands.Choice[str]]:
+    print("🔍 In autocomplete:", current)
+    if not itr.guild:  
+        return [] 
+    
     data = []
 
-    for i, ping in enumerate(pings):
+    for ping in pings:
 
         if ping["memberId"] == itr.user.id:
-
-            channel: discord.TextChannel = get(itr.guild.channels, id=ping["channelId"])
-            target = get(itr.guild.members, id=ping["memberId"])
-            pkws: list[str] = "/".join(ping["positiveKeywords"])
-            nkws: list[str] = "/".join(ping["negativeKeywords"])
-            price = ping["price"]
-            if current in (channel.name + target.name + pkws + nkws):
-
+            keyword_id: str = ping["keywordId"]
+            if current in "".join(keyword_id.split("-")) or current in keyword_id:
                 data.append(
                     app_commands.Choice(
-                        name=f"#{channel.name} @{target.name} +({pkws}) -({nkws}) ({price} €)",
-                        value=i,
+                        name=f"Keyword ID: {keyword_id}",
+                        value=keyword_id,
                     )
                 )
 
@@ -229,93 +231,99 @@ async def delete_ping_autocomplete(itr: discord.Interaction, current: str):
 
 
 @client.tree.command(name="delete_keyword", description="Remove a saved keyword.")
-@app_commands.autocomplete(ping=delete_ping_autocomplete)
-# @app_commands.checks.has_role(str(settings["roleId"]))
-async def delete_ping(itr: discord.Interaction, ping: int):
-
+@app_commands.autocomplete(keyword_id=delete_keyword_autocomplete)
+async def delete_ping(itr: discord.Interaction, keyword_id: str):
     global pings
 
-    target_ping = pings[ping]
+    for ping in pings:
+        if ping["keywordId"] == keyword_id:
+            target_ping = ping
+            break
 
+    if not target_ping:
+        await itr.response.send_message("❌ Keyword not found", ephemeral=True)
+        return
+        
     if target_ping["memberId"] and (target_ping["memberId"] != itr.user.id):
+        await itr.response.send_message("❌ You do not have permissions to modify this keyword", ephemeral=True)
+        return
+    
+    pings.remove(target_ping)
+    save_pings(pings)
+    # updated_pings = get_pings()
+    # # Update the pings variable with the new pings list (with the deleted keyword)
+    # pings = updated_pings
+    
 
-        await itr.response.send_message("Permessi mancanti", ephemeral=True)
-
-    else:
-
-        del pings[ping]
-
-        save_pings(pings)
-
-        await itr.response.send_message(
-            "✅ Keyword rimossa correttamente!", ephemeral=True
-        )
+    await itr.response.send_message(
+        "✅ Keyword rimossa correttamente!", ephemeral=True
+    )
 
 
 @client.tree.command(name="edit_keyword", description="Edit a saved keyword.")
-@app_commands.autocomplete(ping=delete_ping_autocomplete)
+@app_commands.autocomplete(keyword_id=delete_keyword_autocomplete)
 # @app_commands.checks.has_role(str(settings["roleId"]))
 async def edit_ping(
     itr: discord.Interaction,
-    keyword_id: int,
+    keyword_id: str,
     new_target_channel: discord.TextChannel = None,
     new_positive_keywords: str = None,
     new_price: int = None,
     new_negative_keywords: str = None,
 ):
-
+    # TODO: Controlla che pings si aggiorni correttamente, non so ancora se lo fa, altrimenti ogni volta fetcha il file pings.json
     global pings
 
-    target_ping = pings[keyword_id]
+    for ping in pings:
+        if ping["keywordId"] == keyword_id:
+            target_ping = ping
+            break
 
+    if not target_ping:
+        await itr.response.send_message("❌ Keyword not found (check the uuid)", ephemeral=True)
+        return
+    
     if target_ping["memberId"] and (target_ping["memberId"] != itr.user.id):
+        await itr.response.send_message("❌ You do not have permissions to modify this keyword", ephemeral=True)
+        return
+    
+    try:
+        if not new_target_channel:
+            new_target_channel = target_ping["channelId"]
 
-        await itr.response.send_message("Permessi mancanti", ephemeral=True)
+        if not new_positive_keywords:
+            new_positive_keywords = target_ping["positiveKeywords"]
+        else:
+            new_positive_keywords = list(map(remove_space, new_positive_keywords.strip().split(",")))
 
-    else:
-        try:
-            # print(itr.user.id)
+        if not new_price:
+            new_price = target_ping["price"]
 
-            if not target_channel:
-                target_channel = pings[ping]["channelId"]
+        if not new_negative_keywords:
+            new_negative_keywords = target_ping["negativeKeywords"]
+        else:
+            new_negative_keywords = list(map(remove_space, new_negative_keywords.strip().split(",")))
 
-            if not positive_keywords:
 
-                positive_keywords = pings[ping]["positiveKeywords"]
-            else:
+        # TODO: Prima rimuove il ping dal file JSON, e poi lo aggiunge con i nuovi dati
+        pings.remove(target_ping)
+        save_pings(pings)
+        # positive_keywords = positive_keywords.split(",")
 
-                positive_keywords = positive_keywords.split(",")
+        updated_pings = add_ping(
+            keyword_id, new_target_channel, new_positive_keywords, new_negative_keywords, new_price, itr.user.id
+        )
+        await send_embed_log(
+            settings["add_log_webhook"], 2, itr.user.id, new_positive_keywords, new_price
+        )
+        pings = updated_pings
 
-            if not price:
-
-                price = pings[ping]["price"]
-
-            if not negative_keywords:
-
-                negative_keywords = pings[ping]["negativeKeywords"]
-
-            else:
-
-                negative_keywords = negative_keywords.split(",")
-
-            del pings[ping]
-            save_pings(pings)
-            # positive_keywords = positive_keywords.split(",")
-
-            updated_pings = add_ping(
-                target_channel, positive_keywords, negative_keywords, price, itr.user.id
-            )
-            await send_embed_log(
-                settings["add_log_webhook"], 2, itr.user.id, positive_keywords, price
-            )
-            pings = updated_pings
-
-            await itr.response.send_message(
-                "✅ Keyword Editata correttamente!", ephemeral=True
-            )
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
+        await itr.response.send_message(
+            "✅ Keyword Editata correttamente!", ephemeral=True
+        )
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
 
 
 @client.tree.command(name="list_keywords", description="List all saved keywords.")
@@ -328,6 +336,7 @@ async def list_keywords(itr: discord.Interaction):
     for i, ping in enumerate(pings):
 
         if ping["memberId"] == itr.user.id:
+            keyword_id = ping["keywordId"]            
             channel: Union[discord.TextChannel, None] = None
             if  ping["channelId"] == "server":
                 channel = None
@@ -337,6 +346,8 @@ async def list_keywords(itr: discord.Interaction):
             nkws: list[str] = ", ".join(ping["negativeKeywords"])
             price: int | None = ping["price"]
 
+
+            embed_description += f"**Keyword ID:** {keyword_id}\n"
             if channel:
                 embed_description += f"**Channel:** <#{channel.id}>\n"
             else:
@@ -353,18 +364,17 @@ async def list_keywords(itr: discord.Interaction):
             else:
                 embed_description += f"**Price:** Not set\n\n"
     
-    print("🔥", embed_description)
     if embed_description == "":
         embed_description = "No keywords found"
 
     embed = Embed()
-    embed.set_author(name=f"{username}'s Keywords", icon_url=itr.user.avatar_url)
+    embed.set_author(name=f"{username}'s Keywords", icon_url=itr.user.avatar)
     embed.description = embed_description
     embed.color = 0x2D2D2D
     embed.set_footer(text="Keyword Logger", icon_url=settings["avatar_url"])
     
     try:
-        await itr.response.send_message(embed=embed)
+        await itr.response.send_message(embed=embed, ephemeral=True)
     except Exception as e:
         print(f"Errore nell'invio del messaggio: {e}")
 

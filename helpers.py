@@ -1,6 +1,6 @@
 import json
 import discord
-from typing import Dict
+from typing import Dict, List
 
 
 def get_pings() -> list:
@@ -19,6 +19,7 @@ def save_pings(new_pings: list):
 
 # Ricordo che questo codice non l'ho fatto io, altrimenti non sarebbe cosi brutto
 def add_ping(
+    uuid: str,
     channel: discord.TextChannel | str,
     positive_keywords: list[str],
     negative_keywords: list[str],
@@ -39,6 +40,7 @@ def add_ping(
 
     pings.append(
         {
+            "keywordId": uuid, # TODO: Generate a UUID
             "channelId": channelId,
             "positiveKeywords": positive_keywords,
             "negativeKeywords": negative_keywords,
@@ -99,7 +101,7 @@ def check_msg_has_keyword(
         url_check = any(k.lower() in embedJson["url"].lower() for k in positive_keywords)
 
 
-    if price and "price" in embedJson.keys():
+    if price and len(embedJson["price"]) > 0:
         # price_check = float(embedJson["price"].split()) <= float(price)
         price_check = any(list(map(lambda x: float(x) <= float(price), embedJson["price"].split("|"))))
         print("🚀 ~ price_check:", price_check)
@@ -157,3 +159,6 @@ def get_embed(msg: discord.Message) -> str:
         embeds.append(embed)
 
     return embeds
+
+def remove_space(keyword: str) -> str:
+    return keyword.strip()
