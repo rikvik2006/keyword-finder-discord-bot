@@ -157,9 +157,9 @@ async def add_new_keyword(
     if not negative_keywords:
         negative_keywords = []
     else:
-        negative_keywords = list(map(remove_space, negative_keywords.strip().split(",")))
+        negative_keywords = format_keywords(negative_keywords)
 
-    positive_keywords = list(map(remove_space, positive_keywords.strip().split(",")))
+    positive_keywords = format_keywords(positive_keywords)
 
 
     if server_keyword:
@@ -209,7 +209,6 @@ async def delete_keyword_autocomplete(
     itr: discord.Interaction,
     current: str,
 ) -> List[app_commands.Choice[str]]:
-    print("🔍 In autocomplete:", current)
     if not itr.guild:  
         return [] 
     
@@ -294,7 +293,7 @@ async def edit_ping(
         if not new_positive_keywords:
             new_positive_keywords = target_ping["positiveKeywords"]
         else:
-            new_positive_keywords = list(map(remove_space, new_positive_keywords.strip().split(",")))
+            new_positive_keywords = format_keywords(new_positive_keywords)
 
         if not new_price:
             new_price = target_ping["price"]
@@ -302,7 +301,7 @@ async def edit_ping(
         if not new_negative_keywords:
             new_negative_keywords = target_ping["negativeKeywords"]
         else:
-            new_negative_keywords = list(map(remove_space, new_negative_keywords.strip().split(",")))
+            new_negative_keywords = format_keywords(new_negative_keywords)
 
 
         # TODO: Prima rimuove il ping dal file JSON, e poi lo aggiunge con i nuovi dati

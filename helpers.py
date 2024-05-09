@@ -162,3 +162,11 @@ def get_embed(msg: discord.Message) -> str:
 
 def remove_space(keyword: str) -> str:
     return keyword.strip()
+
+def format_keywords(keywords_str: str) -> List[str]:
+    keywords = list(map(remove_space, keywords_str.strip().split(",")))
+    keywords = list(filter(lambda x: x != "", keywords))
+    keywords = list(filter(lambda x: len(x) > 0, keywords))
+    keywords = list(map(lambda x: x.lower(), keywords))
+
+    return keywords
