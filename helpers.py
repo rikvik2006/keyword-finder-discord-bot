@@ -148,11 +148,12 @@ def _parse_msg_text(msg: discord.Message) -> Dict[str, str]:
         # Se nel embed è presente il field con nome "price", allora prende il valore inserendolo nel Dict
         for field in embed.fields:
             if field.value:
-                embedJson["txt"] += field.value
+                embedJson["txt"] += f" {field.value}"
 
                 if field.name and field.name.lower() == "price":
                     embedJson["price"] += f"{field.value.replace('€', '').replace('$', '').strip()}|"
 
+    embedJson["txt"] = embedJson["txt"].strip()
     return embedJson
 
 # TODO: Use regex to check if the keyword is present in the message
