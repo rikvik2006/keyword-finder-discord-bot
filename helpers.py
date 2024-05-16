@@ -152,7 +152,7 @@ def _parse_msg_text(msg: discord.Message) -> Dict[str, str]:
 
                 if field.name and field.name.lower() == "price":
                     embedJson["price"] += f"{field.value.replace('€', '').replace('$', '').strip()}|"
-                    print(embedJson["price"])
+
     return embedJson
 
 # TODO: Use regex to check if the keyword is present in the message
@@ -173,8 +173,6 @@ def check_msg_text_keyword_regex(
             # Split the price string by "|" and remove empty strings
             filtered_price_list = list(filter(lambda x: x != "", msg_text["price"].split("|")))
             # Check if  any of the price is less than the price set by the user
-
-            print("🌟", filtered_price_list)
             ping_condition = any(list(map(lambda x: float(x) <= float(price), filtered_price_list)))
             if ping_condition:
                 price_condition = True
@@ -198,11 +196,11 @@ def check_msg_text_keyword_regex(
                     regex = fr"\b{keyword}\b"
                     if re.search(regex, msg_text[key], re.IGNORECASE):
                         found_negative_keyword.append(True)
+                    else:
+                        found_negative_keyword.append(False)
                 contain_all_negative_keywords = all(found_negative_keyword)
 
                 ping_condition = ping_condition and not contain_all_negative_keywords 
-                
-                print(f"📚 [PingCodition (NegativeKeyword)] {key}:", ping_condition)
                 pings_condition.append(ping_condition)        
             else:
                 ping_condition = True
@@ -211,8 +209,7 @@ def check_msg_text_keyword_regex(
                     if not re.search(regex, msg_text[key], re.IGNORECASE):
                         ping_condition = False
                         break
-                
-                print(f"📚 [PingCodition] {key}:", ping_condition)
+                    
                 pings_condition.append(ping_condition) 
                 
     if price_condition:
